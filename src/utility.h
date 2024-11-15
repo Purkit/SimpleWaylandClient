@@ -14,4 +14,6 @@
 #define verbose(fmt, ...)
 #endif // VERBOSE
 
+#define ERROR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+
 #endif // LOG_H

@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <time.h>
@@ -17,7 +18,14 @@
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
 
-#define DEBUG 1
+#include <EGL/egl.h>
+#include <wayland-egl-backend.h>
+#include <wayland-egl-core.h>
+#include <wayland-egl.h>
+
+#include "glad/glad.h"
+
+// #define DEBUG 1
 #define VERBOSE 1
 #include "utility.h"
 
@@ -111,7 +119,7 @@ struct touch_event {
         struct touch_point points[10];
 };
 
-typedef struct wayland_client_state {
+typedef struct WaylandClientContext {
         // Globals:
         struct wl_display *display;
         struct wl_registry *registry;
@@ -119,6 +127,7 @@ typedef struct wayland_client_state {
         struct wl_compositor *compositor;
         struct xdg_wm_base *xdg_wm_base;
         struct wl_seat *wl_seat;
+
         // Interfaces:
         struct wl_surface *wl_surface;
         struct xdg_surface *xdg_surface;
@@ -128,17 +137,26 @@ typedef struct wayland_client_state {
         struct wl_keyboard *wl_keyboard;
         struct wl_pointer *wl_pointer;
         struct wl_touch *wl_touch;
+
         // State
         float offset;
         uint32_t last_frame;
         int width, height;
         bool shouldClose;
+        struct wl_callback *redraw_signal_callback;
         struct pointer_event pointer_event;
         struct xkb_state *xkb_state;
         struct xkb_context *xkb_context;
         struct xkb_keymap *xkb_keymap;
         struct touch_event touch_event;
-} wayland_client_state;
+
+        // EGL Objects:
+        EGLDisplay egl_display;
+        EGLConfig egl_config;
+        EGLContext egl_context;
+        EGLSurface egl_surface;
+        struct wl_egl_window *egl_window;
+} WaylandClientContext;
 
 static void wl_buffer_release_event_handler(void *data,
                                             struct wl_buffer *wl_buffer) {
@@ -151,8 +169,8 @@ static const struct wl_buffer_listener wl_buffer_listener = {
     .release = wl_buffer_release_event_handler,
 };
 
-static struct wl_buffer *draw_frame(struct wayland_client_state *state) {
-    /*verbose("draw_frame called!\n");*/
+static struct wl_buffer *draw_frame_cpu(struct WaylandClientContext *state) {
+    /*verbose("draw_frame_cpu called!\n");*/
     const int width = state->width;
     const int height = state->height;
     int stride = width * 4;
@@ -191,15 +209,29 @@ static struct wl_buffer *draw_frame(struct wayland_client_state *state) {
     wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
     return buffer;
 }
+
+static void on_resize(struct WaylandClientContext *state) {
+    wl_egl_window_resize(state->egl_window, state->width, state->height, 0, 0);
+    glViewport(0, 0, state->width, state->height);
+    glScissor(0, 0, state->width, state->height);
+}
+
+static void draw_frame_gpu(struct WaylandClientContext *state) {
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    eglSwapBuffers(state->egl_display, state->egl_surface);
+}
+
 static void xdg_surface_configure_event_handler(void *data,
                                                 struct xdg_surface *xdg_surface,
                                                 uint32_t serial) {
     verbose("xdg_surface::configure event recieved!\n");
-    struct wayland_client_state *state = data;
+    struct WaylandClientContext *state = data;
     xdg_surface_ack_configure(xdg_surface, serial);
 
-    struct wl_buffer *buffer = draw_frame(state);
-    wl_surface_attach(state->wl_surface, buffer, 0, 0);
+    /*struct wl_buffer *buffer = draw_frame_cpu(state);
+    wl_surface_attach(state->wl_surface, buffer, 0, 0);*/
     wl_surface_commit(state->wl_surface);
 }
 
@@ -211,16 +243,17 @@ static void xdg_toplevel_configure_event_handler(
     void *data, struct xdg_toplevel *xdg_toplevel, int32_t width,
     int32_t height, struct wl_array *states) {
     verbose("xdg_toplevel::configure event recieved!\n");
-    // struct wayland_client_state *state = data;
-    // state->width = width;
-    // state->height = height;
+    struct WaylandClientContext *state = data;
+    state->width = width;
+    state->height = height;
+    on_resize(state);
 }
 
 static void
 xdg_toplevel_close_event_handler(void *data,
                                  struct xdg_toplevel *xdg_toplevel) {
     verbose("close button clicked!\n");
-    struct wayland_client_state *state = data;
+    struct WaylandClientContext *state = data;
     state->shouldClose = true;
 }
 
@@ -261,24 +294,28 @@ static const struct wl_callback_listener wl_surface_frame_listener;
 
 static void wl_surface_frame_done(void *data, struct wl_callback *cb,
                                   uint32_t time) {
-    /* Destroy this callback */
-    wl_callback_destroy(cb);
-    /* Request another frame */
-    struct wayland_client_state *state = data;
-    cb = wl_surface_frame(state->wl_surface);
-    wl_callback_add_listener(cb, &wl_surface_frame_listener, state);
+    if (cb) {
+        wl_callback_destroy(cb);
+    }
+    struct WaylandClientContext *state = data;
+    state->redraw_signal_callback = wl_surface_frame(state->wl_surface);
+    wl_callback_add_listener(state->redraw_signal_callback,
+                             &wl_surface_frame_listener, state);
     /* Update scroll amount at 24 pixels per second */
     if (state->last_frame != 0) {
         int elapsed = time - state->last_frame;
         state->offset += elapsed / 1000.0 * 24;
     }
 
-    /* Submit a frame for this event */
-    struct wl_buffer *buffer = draw_frame(state);
+    /*
+    struct wl_buffer *buffer = draw_frame_cpu(state);
     wl_surface_attach(state->wl_surface, buffer, 0, 0);
     wl_surface_damage_buffer(state->wl_surface, 0, 0, INT32_MAX, INT32_MAX);
     wl_surface_commit(state->wl_surface);
+    */
 
+    draw_frame_gpu(state);
+    wl_surface_commit(state->wl_surface);
     state->last_frame = time;
 }
 
@@ -289,7 +326,7 @@ static const struct wl_callback_listener wl_surface_frame_listener = {
 static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
                              uint32_t serial, struct wl_surface *surface,
                              wl_fixed_t surface_x, wl_fixed_t surface_y) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_ENTER;
     client_state->pointer_event.serial = serial;
     client_state->pointer_event.surface_x = surface_x,
@@ -298,7 +335,7 @@ static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
 
 static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
                              uint32_t serial, struct wl_surface *surface) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.serial = serial;
     client_state->pointer_event.event_mask |= POINTER_EVENT_LEAVE;
 }
@@ -306,7 +343,7 @@ static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
 static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
                               uint32_t time, wl_fixed_t surface_x,
                               wl_fixed_t surface_y) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_MOTION;
     client_state->pointer_event.time = time;
     client_state->pointer_event.surface_x = surface_x,
@@ -316,7 +353,7 @@ static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
 static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
                               uint32_t serial, uint32_t time, uint32_t button,
                               uint32_t state) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_BUTTON;
     client_state->pointer_event.time = time;
     client_state->pointer_event.serial = serial;
@@ -326,7 +363,7 @@ static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
 
 static void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
                             uint32_t time, uint32_t axis, wl_fixed_t value) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS;
     client_state->pointer_event.time = time;
     client_state->pointer_event.axes[axis].valid = true;
@@ -335,14 +372,14 @@ static void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
 
 static void wl_pointer_axis_source(void *data, struct wl_pointer *wl_pointer,
                                    uint32_t axis_source) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_SOURCE;
     client_state->pointer_event.axis_source = axis_source;
 }
 
 static void wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
                                  uint32_t time, uint32_t axis) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.time = time;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_STOP;
     client_state->pointer_event.axes[axis].valid = true;
@@ -350,7 +387,7 @@ static void wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
 
 static void wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
                                      uint32_t axis, int32_t discrete) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_DISCRETE;
     client_state->pointer_event.axes[axis].valid = true;
     client_state->pointer_event.axes[axis].discrete = discrete;
@@ -426,7 +463,7 @@ static void wl_pointer_relative_direction_event(void *data,
 }
 
 static void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct pointer_event *event = &client_state->pointer_event;
     verbose("pointer frame @ %d: ", event->time);
 
@@ -505,7 +542,7 @@ static const struct wl_pointer_listener wl_pointer_listener = {
 
 static void wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
                                uint32_t format, int32_t fd, uint32_t size) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     assert(format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1);
 
     char *map_shm = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
@@ -527,7 +564,7 @@ static void wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
 static void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
                               uint32_t serial, struct wl_surface *surface,
                               struct wl_array *keys) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     verbose("keyboard enter; keys pressed are:\n");
     uint32_t *key;
     wl_array_for_each(key, keys) {
@@ -545,7 +582,7 @@ static void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
 static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
                             uint32_t serial, uint32_t time, uint32_t key,
                             uint32_t state) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     char buf[128];
     uint32_t keycode = key + 8;
     xkb_keysym_t sym =
@@ -568,7 +605,7 @@ static void wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
                                   uint32_t serial, uint32_t mods_depressed,
                                   uint32_t mods_latched, uint32_t mods_locked,
                                   uint32_t group) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     xkb_state_update_mask(client_state->xkb_state, mods_depressed, mods_latched,
                           mods_locked, 0, 0, group);
 }
@@ -588,7 +625,7 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 };
 
 static struct touch_point *
-get_touch_point(struct wayland_client_state *client_state, int32_t id) {
+get_touch_point(struct WaylandClientContext *client_state, int32_t id) {
     struct touch_event *touch = &client_state->touch_event;
     const size_t nmemb = sizeof(touch->points) / sizeof(struct touch_point);
     int invalid = -1;
@@ -612,7 +649,7 @@ static void wl_touch_down(void *data, struct wl_touch *wl_touch,
                           uint32_t serial, uint32_t time,
                           struct wl_surface *surface, int32_t id, wl_fixed_t x,
                           wl_fixed_t y) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_point *point = get_touch_point(client_state, id);
     if (point == NULL) {
         return;
@@ -626,7 +663,7 @@ static void wl_touch_down(void *data, struct wl_touch *wl_touch,
 
 static void wl_touch_up(void *data, struct wl_touch *wl_touch, uint32_t serial,
                         uint32_t time, int32_t id) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_point *point = get_touch_point(client_state, id);
     if (point == NULL) {
         return;
@@ -637,7 +674,7 @@ static void wl_touch_up(void *data, struct wl_touch *wl_touch, uint32_t serial,
 static void wl_touch_motion(void *data, struct wl_touch *wl_touch,
                             uint32_t time, int32_t id, wl_fixed_t x,
                             wl_fixed_t y) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_point *point = get_touch_point(client_state, id);
     if (point == NULL) {
         return;
@@ -648,13 +685,13 @@ static void wl_touch_motion(void *data, struct wl_touch *wl_touch,
 }
 
 static void wl_touch_cancel(void *data, struct wl_touch *wl_touch) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     client_state->touch_event.event_mask |= TOUCH_EVENT_CANCEL;
 }
 
 static void wl_touch_shape(void *data, struct wl_touch *wl_touch, int32_t id,
                            wl_fixed_t major, wl_fixed_t minor) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_point *point = get_touch_point(client_state, id);
     if (point == NULL) {
         return;
@@ -665,7 +702,7 @@ static void wl_touch_shape(void *data, struct wl_touch *wl_touch, int32_t id,
 
 static void wl_touch_orientation(void *data, struct wl_touch *wl_touch,
                                  int32_t id, wl_fixed_t orientation) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_point *point = get_touch_point(client_state, id);
     if (point == NULL) {
         return;
@@ -675,7 +712,7 @@ static void wl_touch_orientation(void *data, struct wl_touch *wl_touch,
 }
 
 static void wl_touch_frame(void *data, struct wl_touch *wl_touch) {
-    struct wayland_client_state *client_state = data;
+    struct WaylandClientContext *client_state = data;
     struct touch_event *touch = &client_state->touch_event;
     const size_t nmemb = sizeof(touch->points) / sizeof(struct touch_point);
     verbose("touch event @ %d:\n", touch->time);
@@ -727,7 +764,7 @@ static const struct wl_touch_listener wl_touch_listener = {
 
 static void wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
                                  uint32_t capabilities) {
-    struct wayland_client_state *state = data;
+    struct WaylandClientContext *state = data;
 
     bool have_pointer = capabilities & WL_SEAT_CAPABILITY_POINTER;
 
@@ -776,7 +813,7 @@ static void registry_global_event_handler(void *data,
                                           uint32_t name,
                                           const char *interface_string,
                                           uint32_t version) {
-    wayland_client_state *state = data;
+    WaylandClientContext *state = data;
     if (strcmp(interface_string, wl_compositor_interface.name) == 0) {
         state->compositor =
             wl_registry_bind(registry, name, &wl_compositor_interface, 6);
@@ -808,66 +845,177 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = registry_global_remove,
 };
 
-int main(int argc, char **argv) {
-    wayland_client_state interfaces = {0};
-    interfaces.width = 640;
-    interfaces.height = 480;
+static const EGLint egl_attrib_list[] = {
+    EGL_RED_SIZE,
+    8,
+    EGL_GREEN_SIZE,
+    8,
+    EGL_BLUE_SIZE,
+    8,
+    EGL_ALPHA_SIZE,
+    8,
+    EGL_BUFFER_SIZE,
+    32,
+    EGL_DEPTH_SIZE,
+    0,
+    EGL_STENCIL_SIZE,
+    0,
+    EGL_SAMPLES,
+    0,
+    EGL_SURFACE_TYPE,
+    EGL_WINDOW_BIT,
+    EGL_RENDERABLE_TYPE,
+    EGL_OPENGL_BIT,
+    EGL_CONFIG_CAVEAT,
+    EGL_NONE,
+    EGL_MAX_SWAP_INTERVAL,
+    1,
+    EGL_NONE,
+};
 
-    interfaces.display = wl_display_connect(NULL);
-    if (!interfaces.display) {
+int main(int argc, char **argv) {
+    WaylandClientContext wlClientState = {0};
+    wlClientState.width = 640;
+    wlClientState.height = 480;
+
+    wlClientState.display = wl_display_connect(NULL);
+    if (!wlClientState.display) {
         verbose("Failed to connect to the wayland compositor!\n");
         return 1;
     }
-    interfaces.registry = wl_display_get_registry(interfaces.display);
-    interfaces.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    wl_registry_add_listener(interfaces.registry, &registry_listener,
-                             &interfaces);
-    wl_display_roundtrip(interfaces.display);
+    wlClientState.registry = wl_display_get_registry(wlClientState.display);
+    wlClientState.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    wl_registry_add_listener(wlClientState.registry, &registry_listener,
+                             &wlClientState);
+    wl_display_roundtrip(wlClientState.display);
 
-    interfaces.wl_surface = wl_compositor_create_surface(interfaces.compositor);
-    interfaces.xdg_surface = xdg_wm_base_get_xdg_surface(interfaces.xdg_wm_base,
-                                                         interfaces.wl_surface);
+    wlClientState.wl_surface =
+        wl_compositor_create_surface(wlClientState.compositor);
+    wlClientState.xdg_surface = xdg_wm_base_get_xdg_surface(
+        wlClientState.xdg_wm_base, wlClientState.wl_surface);
 
-    xdg_surface_add_listener(interfaces.xdg_surface, &xdg_surface_listener,
-                             &interfaces);
-    interfaces.xdg_toplevel = xdg_surface_get_toplevel(interfaces.xdg_surface);
-    xdg_toplevel_add_listener(interfaces.xdg_toplevel,
-                              &xdg_toplevel_events_listener, &interfaces);
-    xdg_toplevel_set_title(interfaces.xdg_toplevel, "hello wayland");
-    interfaces.xdg_toplevel_decoration =
+    xdg_surface_add_listener(wlClientState.xdg_surface, &xdg_surface_listener,
+                             &wlClientState);
+    wlClientState.xdg_toplevel =
+        xdg_surface_get_toplevel(wlClientState.xdg_surface);
+    xdg_toplevel_add_listener(wlClientState.xdg_toplevel,
+                              &xdg_toplevel_events_listener, &wlClientState);
+    xdg_toplevel_set_title(wlClientState.xdg_toplevel, "hello wayland");
+    wlClientState.xdg_toplevel_decoration =
         zxdg_decoration_manager_v1_get_toplevel_decoration(
-            interfaces.xdg_decoration_manager, interfaces.xdg_toplevel);
-    wl_surface_commit(interfaces.wl_surface);
+            wlClientState.xdg_decoration_manager, wlClientState.xdg_toplevel);
+    wl_surface_commit(wlClientState.wl_surface);
 
-    struct wl_callback *cb = wl_surface_frame(interfaces.wl_surface);
-    wl_callback_add_listener(cb, &wl_surface_frame_listener, &interfaces);
+    /*struct wl_callback *cb = wl_surface_frame(wlClientState.wl_surface);
+    wl_callback_add_listener(cb, &wl_surface_frame_listener, &wlClientState);*/
 
-    interfaces.shouldClose = false;
-    while (!interfaces.shouldClose) {
+    verbose("Trying to initialize EGL!\n");
+    // Step 1: Initialize egl
+    wlClientState.egl_display =
+        eglGetDisplay((EGLNativeDisplayType)wlClientState.display);
+    EGLint egl_major, egl_minor;
+    eglInitialize(wlClientState.egl_display, &egl_major, &egl_minor);
+    verbose("Step 1 passed!\n");
+
+    // Step 2: Select an appropriate configuration
+    EGLint no_of_matching_configs;
+    if (!eglChooseConfig(wlClientState.egl_display, egl_attrib_list,
+                         &wlClientState.egl_config, 1,
+                         &no_of_matching_configs)) {
+        ERROR("failed to get valid egl config!\n");
+    }
+    if (no_of_matching_configs == 0) {
+        ERROR("No matching egl config found!");
+        ERROR("Failed to obtain OpenGL context!");
+        goto exit;
+    }
+    verbose("Step 2 passed!\n");
+
+    // Step 3: Create a EGL Surface
+    wlClientState.egl_window = wl_egl_window_create(
+        wlClientState.wl_surface, wlClientState.width, wlClientState.height);
+    const EGLint egl_surface_attrib_list[] = {
+        EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_LINEAR,
+        EGL_RENDER_BUFFER, EGL_BACK_BUFFER,
+        EGL_NONE,
+    };
+    wlClientState.egl_surface = eglCreateWindowSurface(
+        wlClientState.egl_display, wlClientState.egl_config,
+        (EGLNativeWindowType)wlClientState.egl_window, egl_surface_attrib_list);
+    verbose("Step 3 passed!\n");
+
+    // Step 4: Bind the OpenGL API
+    eglBindAPI(EGL_OPENGL_API);
+    verbose("Step 4 passed!\n");
+
+    // Step 5: Create a OpenGL Context and make it current
+    const EGLint opengl_context_attribs[] = {
+        EGL_CONTEXT_MAJOR_VERSION,
+        4,
+        EGL_CONTEXT_MINOR_VERSION,
+        6,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+        EGL_NONE,
+    };
+    wlClientState.egl_context =
+        eglCreateContext(wlClientState.egl_display, wlClientState.egl_config,
+                         EGL_NO_CONTEXT, opengl_context_attribs);
+    eglMakeCurrent(wlClientState.egl_display, wlClientState.egl_surface,
+                   wlClientState.egl_surface, wlClientState.egl_context);
+    verbose("Step 5 passed!\n");
+
+    gladLoadGLLoader((GLADloadproc)eglGetProcAddress);
+    verbose("glad loaded gl Symbols!\n");
+
+    const char *gl_query = (const char *)glGetString(GL_VERSION);
+    printf("\nGL_VERSION: %s", gl_query);
+    gl_query = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    printf("GL_SHADING_LANGUAGE_VERSION: %s", gl_query);
+    gl_query = (const char *)glGetString(GL_VENDOR);
+    printf("GL_VENDOR: %s", gl_query);
+    gl_query = (const char *)glGetString(GL_RENDERER);
+    printf("GL_RENDERER: %s", gl_query);
+
+    // We need to manually call this function for once
+    // in order to begin rendering.
+    // TODO: Achieve this behivour by a InitRender() method.
+    wl_surface_frame_done(&wlClientState, NULL, 0);
+
+    wlClientState.shouldClose = false;
+    while (!wlClientState.shouldClose) {
 
         wl_display_dispatch(
-            interfaces.display); // Waits for next event (Blocking)
-        // wl_display_dispatch_pending(interfaces.display); // Non-blocking
+            wlClientState.display); // Waits for next event (Blocking)
+        // wl_display_dispatch_pending(wlClientState.display); // Non-blocking
         // event polling
     }
 
-    zxdg_toplevel_decoration_v1_destroy(interfaces.xdg_toplevel_decoration);
-    zxdg_decoration_manager_v1_destroy(interfaces.xdg_decoration_manager);
-    xdg_toplevel_destroy(interfaces.xdg_toplevel);
-    xdg_surface_destroy(interfaces.xdg_surface);
-    xdg_wm_base_destroy(interfaces.xdg_wm_base);
-    wl_surface_destroy(interfaces.wl_surface);
-    if (interfaces.wl_keyboard != NULL) {
-        wl_keyboard_release(interfaces.wl_keyboard);
+exit:
+    eglMakeCurrent(wlClientState.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                   EGL_NO_CONTEXT);
+    eglDestroyContext(wlClientState.egl_display, wlClientState.egl_context);
+    eglDestroySurface(wlClientState.egl_display, wlClientState.egl_surface);
+    wl_egl_window_destroy(wlClientState.egl_window);
+    eglTerminate(wlClientState.egl_display);
+
+    zxdg_toplevel_decoration_v1_destroy(wlClientState.xdg_toplevel_decoration);
+    zxdg_decoration_manager_v1_destroy(wlClientState.xdg_decoration_manager);
+    xdg_toplevel_destroy(wlClientState.xdg_toplevel);
+    xdg_surface_destroy(wlClientState.xdg_surface);
+    xdg_wm_base_destroy(wlClientState.xdg_wm_base);
+    wl_surface_destroy(wlClientState.wl_surface);
+    if (wlClientState.wl_keyboard != NULL) {
+        wl_keyboard_release(wlClientState.wl_keyboard);
     }
-    if (interfaces.wl_pointer != NULL) {
-        wl_pointer_release(interfaces.wl_pointer);
+    if (wlClientState.wl_pointer != NULL) {
+        wl_pointer_release(wlClientState.wl_pointer);
     }
-    if (interfaces.wl_touch != NULL) {
-        wl_touch_release(interfaces.wl_touch);
+    if (wlClientState.wl_touch != NULL) {
+        wl_touch_release(wlClientState.wl_touch);
     }
-    wl_seat_release(interfaces.wl_seat);
-    wl_display_disconnect(interfaces.display);
+    wl_seat_release(wlClientState.wl_seat);
+    wl_display_disconnect(wlClientState.display);
     verbose("All resources freed!\n");
     verbose("Quiting program!\n");
     return 0;
