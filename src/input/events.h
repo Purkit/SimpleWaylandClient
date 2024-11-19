@@ -1,6 +1,7 @@
 #ifndef LOW_LEVEL_EVENTS_H
 #define LOW_LEVEL_EVENTS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <wayland-util.h>
 

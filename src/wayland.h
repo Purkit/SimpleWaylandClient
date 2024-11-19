@@ -1,17 +1,18 @@
 #ifndef WAYLAND_H
 #define WAYLAND_H
 
-#include "events.h"
+#include "input/events.h"
 #include <EGL/egl.h>
+#include <stdbool.h>
 
 typedef struct WaylandClientContext {
         // Globals:
         struct wl_display *display;
         struct wl_registry *registry;
-        struct wl_shm *shm;
         struct wl_compositor *compositor;
         struct xdg_wm_base *xdg_wm_base;
         struct wl_seat *wl_seat;
+        struct wl_shm *shm;
 
         // Interfaces:
         struct wl_surface *wl_surface;
@@ -24,8 +25,7 @@ typedef struct WaylandClientContext {
         struct wl_touch *wl_touch;
 
         // State
-        float offset;
-        uint32_t last_frame;
+        double last_frame;
         int width, height;
         bool shouldClose;
         struct wl_callback *redraw_signal_callback;
@@ -41,6 +41,7 @@ typedef struct WaylandClientContext {
         EGLContext egl_context;
         EGLSurface egl_surface;
         struct wl_egl_window *egl_window;
+
 } WaylandClientContext;
 
 #endif // WAYLAND_H
