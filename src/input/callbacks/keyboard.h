@@ -2,7 +2,7 @@
 #define KEYBOARD_CALLBACKS
 
 #include "../../utility.h"
-#include "../../wayland.h"
+#include "../../wlClient.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

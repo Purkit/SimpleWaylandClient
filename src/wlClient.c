@@ -1,12 +1,12 @@
-#include "init.h"
+#include "wlClient.h"
+
 #include "protocols/xdg-decoration-protocol.h"
 #include "protocols/xdg-shell-client-protocol.h"
 #include <string.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include "input.h"
+#include "input/registerer.h"
 #include "utility.h"
-#include "wayland.h"
 
 static void xdg_wm_base_ping_handler(void *data,
                                      struct xdg_wm_base *xdg_wm_base,
@@ -225,4 +225,32 @@ int egl_create_opengl_context(WaylandClientContext *clientState) {
                    clientState->egl_surface, clientState->egl_context);
 
     return 1;
+}
+
+void wayland_client_shutdown(WaylandClientContext *wlClientState) {
+
+    eglMakeCurrent(wlClientState->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                   EGL_NO_CONTEXT);
+    eglDestroyContext(wlClientState->egl_display, wlClientState->egl_context);
+    eglDestroySurface(wlClientState->egl_display, wlClientState->egl_surface);
+    wl_egl_window_destroy(wlClientState->egl_window);
+    eglTerminate(wlClientState->egl_display);
+
+    zxdg_toplevel_decoration_v1_destroy(wlClientState->xdg_toplevel_decoration);
+    zxdg_decoration_manager_v1_destroy(wlClientState->xdg_decoration_manager);
+    xdg_toplevel_destroy(wlClientState->xdg_toplevel);
+    xdg_surface_destroy(wlClientState->xdg_surface);
+    xdg_wm_base_destroy(wlClientState->xdg_wm_base);
+    wl_surface_destroy(wlClientState->wl_surface);
+    if (wlClientState->wl_keyboard != NULL) {
+        wl_keyboard_release(wlClientState->wl_keyboard);
+    }
+    if (wlClientState->wl_pointer != NULL) {
+        wl_pointer_release(wlClientState->wl_pointer);
+    }
+    if (wlClientState->wl_touch != NULL) {
+        wl_touch_release(wlClientState->wl_touch);
+    }
+    wl_seat_release(wlClientState->wl_seat);
+    wl_display_disconnect(wlClientState->display);
 }

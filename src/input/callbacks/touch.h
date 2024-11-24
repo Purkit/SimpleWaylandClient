@@ -2,7 +2,7 @@
 #define TOUCH_CALLBACK
 
 #include "../../utility.h"
-#include "../../wayland.h"
+#include "../../wlClient.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

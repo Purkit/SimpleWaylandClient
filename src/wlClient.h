@@ -2,8 +2,17 @@
 #define WAYLAND_H
 
 #include "input/events.h"
-#include <EGL/egl.h>
 #include <stdbool.h>
+
+#include <EGL/egl.h>
+#include <wayland-egl-backend.h>
+#include <wayland-egl-core.h>
+#include <wayland-egl.h>
+
+#include <stdio.h>
+// #define DEBUG 1
+#define VERBOSE 1
+#include "utility.h"
 
 typedef struct WaylandClientContext {
         // Globals:
@@ -43,5 +52,10 @@ typedef struct WaylandClientContext {
         struct wl_egl_window *egl_window;
 
 } WaylandClientContext;
+
+int wayland_client_initialize(WaylandClientContext *wlClientState);
+int egl_create_opengl_context(WaylandClientContext *clientState);
+
+void wayland_client_shutdown(WaylandClientContext *wlClientState);
 
 #endif // WAYLAND_H
