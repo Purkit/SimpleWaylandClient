@@ -1,119 +1,15 @@
 #include "wlClient.h"
 
-#include "protocols/xdg-decoration-protocol.h"
-#include "protocols/xdg-shell-client-protocol.h"
+#include <wayland-egl-backend.h>
+#include <wayland-egl-core.h>
+#include <wayland-egl.h>
+
 #include <string.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include "input/registerer.h"
-#include "utility.h"
-
-static void xdg_wm_base_ping_handler(void *data,
-                                     struct xdg_wm_base *xdg_wm_base,
-                                     uint32_t serial) {
-    xdg_wm_base_pong(xdg_wm_base, serial);
-}
-
-static const struct xdg_wm_base_listener xdg_wm_base_listener = {
-    .ping = xdg_wm_base_ping_handler,
-};
-
-static void xdg_surface_configure_event_handler(void *data,
-                                                struct xdg_surface *xdg_surface,
-                                                uint32_t serial) {
-    verbose("xdg_surface::configure event recieved!\n");
-    struct WaylandClientContext *state = data;
-    xdg_surface_ack_configure(xdg_surface, serial);
-
-    wl_surface_commit(state->wl_surface);
-}
-
-static const struct xdg_surface_listener xdg_surface_listener = {
-    .configure = xdg_surface_configure_event_handler,
-};
-
-static void xdg_toplevel_configure_event_handler(
-    void *data, struct xdg_toplevel *xdg_toplevel, int32_t width,
-    int32_t height, struct wl_array *states) {
-    verbose("xdg_toplevel::configure event recieved!\n");
-    struct WaylandClientContext *state = data;
-    state->width = width;
-    state->height = height;
-    // on_resize(state);
-    // state->on_resize_callback(state);
-}
-
-static void
-xdg_toplevel_close_event_handler(void *data,
-                                 struct xdg_toplevel *xdg_toplevel) {
-    verbose("close button clicked!\n");
-    struct WaylandClientContext *state = data;
-    state->shouldClose = true;
-}
-
-static void
-wm_capabilities_broadcast_event_handler(void *data,
-                                        struct xdg_toplevel *xdg_toplevel,
-                                        struct wl_array *capabilities) {
-    // Process the list of cabapilities supported by the compositor
-    // and enable or disable the equivalent UI features.
-    verbose("xdg_toplevel::wm_capabilities_broadcast event fired!\n");
-}
-
-static void
-xdg_toplevel_configure_bounds_event_handler(void *data,
-                                            struct xdg_toplevel *xdg_toplevel,
-                                            int32_t width, int32_t height) {
-    // TODO: handle later !
-}
-
-static const struct xdg_toplevel_listener xdg_toplevel_events_listener = {
-    .configure = xdg_toplevel_configure_event_handler,
-    .close = xdg_toplevel_close_event_handler,
-    .configure_bounds = xdg_toplevel_configure_bounds_event_handler,
-    .wm_capabilities = wm_capabilities_broadcast_event_handler,
-};
-
-static void registry_global_event_handler(void *data,
-                                          struct wl_registry *registry,
-                                          uint32_t name,
-                                          const char *interface_string,
-                                          uint32_t version) {
-    WaylandClientContext *state = (WaylandClientContext *)data;
-    if (strcmp(interface_string, wl_compositor_interface.name) == 0) {
-        state->compositor =
-            wl_registry_bind(registry, name, &wl_compositor_interface, 6);
-        verbose("got the compositor !!\n");
-        if (state->compositor == NULL) {
-            verbose("state->compositor == NULL\n");
-        }
-    } else if (strcmp(interface_string, wl_shm_interface.name) == 0) {
-        state->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
-    } else if (strcmp(interface_string, xdg_wm_base_interface.name) == 0) {
-        state->xdg_wm_base =
-            wl_registry_bind(registry, name, &xdg_wm_base_interface, 6);
-        xdg_wm_base_add_listener(state->xdg_wm_base, &xdg_wm_base_listener,
-                                 state);
-    } else if (strcmp(interface_string, wl_seat_interface.name) == 0) {
-        state->wl_seat =
-            wl_registry_bind(registry, name, &wl_seat_interface, 9);
-        wl_seat_add_listener(state->wl_seat, &wl_seat_listener, state);
-    } else if (strcmp(interface_string,
-                      zxdg_decoration_manager_v1_interface.name) == 0) {
-        state->xdg_decoration_manager = wl_registry_bind(
-            registry, name, &zxdg_decoration_manager_v1_interface, 1);
-    }
-}
-
-static void registry_global_remove(void *data, struct wl_registry *registry,
-                                   uint32_t name) {
-    // handle this
-}
-
-static const struct wl_registry_listener registry_listener = {
-    .global = registry_global_event_handler,
-    .global_remove = registry_global_remove,
-};
+#include "internals/listeners/registry.h"
+#include "internals/listeners/xdg-events/surface.h"
+#include "internals/listeners/xdg-events/toplevel.h"
 
 int wayland_client_initialize(WaylandClientContext *wlClientState) {
     wlClientState->display = wl_display_connect(NULL);

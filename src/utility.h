@@ -1,6 +1,8 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include <stdio.h>
+
 #ifdef DEBUG
 #define debug(fmt, ...)                                                        \
     fprintf(stderr, "[%s:%d]", __FILE__, __LINE__, fmt, ##__VA_ARGS__)

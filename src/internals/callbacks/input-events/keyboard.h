@@ -1,8 +1,8 @@
 #ifndef KEYBOARD_CALLBACKS
 #define KEYBOARD_CALLBACKS
 
-#include "../../utility.h"
-#include "../../wlClient.h"
+#include "../../../utility.h"
+#include "../../../wlClientState.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

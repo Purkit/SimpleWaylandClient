@@ -1,7 +1,9 @@
+#ifndef WAYLAND_INPUT_EVENT_LISTENERS
+#define WAYLAND_INPUT_EVENT_LISTENERS
 
-#include "callbacks/keyboard.h"
-#include "callbacks/mouse.h"
-#include "callbacks/touch.h"
+#include "../callbacks/input-events/keyboard.h"
+#include "../callbacks/input-events/mouse.h"
+#include "../callbacks/input-events/touch.h"
 
 static const struct wl_pointer_listener wl_pointer_listener = {
     .enter = wl_pointer_enter,
@@ -35,3 +37,5 @@ static const struct wl_touch_listener wl_touch_listener = {
     .shape = wl_touch_shape,
     .orientation = wl_touch_orientation,
 };
+
+#endif // ! WAYLAND_INPUT_EVENT_LISTENERS

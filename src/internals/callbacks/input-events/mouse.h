@@ -1,8 +1,8 @@
 #ifndef MOUSE_CALLBACKS
 #define MOUSE_CALLBACKS
 
-#include "../../utility.h"
-#include "../../wlClient.h"
+#include "../../../utility.h"
+#include "../../../wlClientState.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

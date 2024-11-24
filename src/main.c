@@ -1,11 +1,8 @@
-#include "protocols/xdg-decoration-protocol.h"
-#include "protocols/xdg-shell-client-protocol.h"
 #include <assert.h>
 #include <bits/time.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <linux/input-event-codes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -17,6 +14,7 @@
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 #include <wayland-client.h>
+#include <wayland-egl-core.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include "glad/glad.h"

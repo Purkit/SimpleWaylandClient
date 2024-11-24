@@ -1,7 +1,7 @@
-#ifndef INPUT_EVENT_LISTENER_CALLBACK_REGISTERER
-#define INPUT_EVENT_LISTENER_CALLBACK_REGISTERER
+#ifndef WAYLAND_INPUT_DEVICE_DISCOVERY_CAllBACKS
+#define WAYLAND_INPUT_DEVICE_DISCOVERY_CAllBACKS
 
-#include "../wlClient.h"
+#include "../../wlClientState.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,11 +12,7 @@
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 
-// #define DEBUG 1
-#define VERBOSE 1
-#include "../utility.h"
-
-#include "listeners.h"
+#include "../listeners/input-events.h"
 
 static void wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
                                  uint32_t capabilities) {
@@ -58,12 +54,7 @@ static void wl_seat_capabilities(void *data, struct wl_seat *wl_seat,
 
 static void wl_seat_name(void *data, struct wl_seat *wl_seat,
                          const char *name) {
-    verbose("seat name: %s\n", name);
+    // do nothing !
 }
 
-static const struct wl_seat_listener wl_seat_listener = {
-    .capabilities = wl_seat_capabilities,
-    .name = wl_seat_name,
-};
-
-#endif // ! INPUT_EVENT_LISTENER_CALLBACK_REGISTERER
+#endif // ! WAYLAND_INPUT_DEVICE_DISCOVERY_LISTENER
