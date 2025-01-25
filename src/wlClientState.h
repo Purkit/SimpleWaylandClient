@@ -43,6 +43,10 @@ typedef struct WaylandClientContext {
         EGLSurface egl_surface;
         struct wl_egl_window *egl_window;
 
+        // Callbacks:
+        void (*resize)(struct WaylandClientContext *);
+        void (*render)(struct WaylandClientContext *);
+
 } WaylandClientContext;
 
 #endif // ! WAYLAND_CLIENT_STATE

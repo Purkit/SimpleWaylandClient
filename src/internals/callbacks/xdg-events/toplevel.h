@@ -15,7 +15,7 @@ static void xdg_toplevel_configure_event_handler(
     state->width = width;
     state->height = height;
     // on_resize(state);
-    // state->on_resize_callback(state);
+    state->resize(state);
 }
 
 static void

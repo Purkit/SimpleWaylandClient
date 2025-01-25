@@ -54,7 +54,7 @@ static void wl_surface_frame_done(void *data, struct wl_callback *cb,
     float fps = 1.0f / elapsed;
     verbose("dt=%f, fps=%f\n", elapsed, fps);
 
-    draw_frame_gpu(state);
+    state->render(state);
     wl_surface_commit(state->wl_surface);
     state->last_frame = time_secs;
 }
@@ -68,8 +68,9 @@ int main(int argc, char **argv) {
     WaylandClientContext wlClientState = {0};
     wlClientState.width = 640;
     wlClientState.height = 480;
-    // wlClientState.on_resize_callback = on_resize;
-    // wlClientState.render_callback = draw_frame_gpu;
+
+    wlClientState.resize = on_resize;
+    wlClientState.render = draw_frame_gpu;
 
     wayland_client_initialize(&wlClientState);
 
@@ -80,7 +81,7 @@ int main(int argc, char **argv) {
     // We need to manually call this function for once
     // in order to begin rendering.
     // TODO: Achieve this behivour by a InitRender() method.
-    // wl_surface_frame_done(&wlClientState, NULL, 0);
+    wl_surface_frame_done(&wlClientState, NULL, 0);
 
     wlClientState.shouldClose = false;
     struct timespec time;
@@ -92,6 +93,7 @@ int main(int argc, char **argv) {
             wlClientState.display); // Waits for next event (Blocking)
         // wl_display_dispatch_pending(wlClientState.display); // Non-blocking
         // event polling
+        /*
         draw_frame_gpu(&wlClientState);
         wl_surface_commit(wlClientState.wl_surface);
         clock_gettime(CLOCK_MONOTONIC, &time);
@@ -100,6 +102,7 @@ int main(int argc, char **argv) {
         double fps = 1.0f / elapsed;
         verbose("dt=%f, fps=%f\n", elapsed, fps);
         wlClientState.last_frame = currentTime;
+        */
     }
 
 exit:
