@@ -1,13 +1,12 @@
+#include "glad/glad.h"
+#include "wlClient.h"
 #include <assert.h>
 #include <bits/time.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
@@ -16,9 +15,6 @@
 #include <wayland-client.h>
 #include <wayland-egl-core.h>
 #include <xkbcommon/xkbcommon.h>
-
-#include "glad/glad.h"
-#include "wlClient.h"
 
 // #define DEBUG 1
 #define VERBOSE 1
@@ -37,32 +33,6 @@ static void draw_frame_gpu(struct WaylandClientContext *state) {
     eglSwapBuffers(state->egl_display, state->egl_surface);
 }
 
-static const struct wl_callback_listener wl_surface_frame_listener;
-
-static void wl_surface_frame_done(void *data, struct wl_callback *cb,
-                                  uint32_t time) {
-    if (cb) {
-        wl_callback_destroy(cb);
-    }
-    struct WaylandClientContext *state = data;
-    state->redraw_signal_callback = wl_surface_frame(state->wl_surface);
-    wl_callback_add_listener(state->redraw_signal_callback,
-                             &wl_surface_frame_listener, state);
-
-    float time_secs = time * 1e-3f;
-    float elapsed = time_secs - state->last_frame;
-    float fps = 1.0f / elapsed;
-    verbose("dt=%f, fps=%f\n", elapsed, fps);
-
-    state->render(state);
-    wl_surface_commit(state->wl_surface);
-    state->last_frame = time_secs;
-}
-
-static const struct wl_callback_listener wl_surface_frame_listener = {
-    .done = wl_surface_frame_done,
-};
-
 int main(int argc, char **argv) {
 
     WaylandClientContext wlClientState = {0};
@@ -78,10 +48,7 @@ int main(int argc, char **argv) {
 
     gladLoadGLLoader((GLADloadproc)eglGetProcAddress);
 
-    // We need to manually call this function for once
-    // in order to begin rendering.
-    // TODO: Achieve this behivour by a InitRender() method.
-    wl_surface_frame_done(&wlClientState, NULL, 0);
+    wayland_init_rendering(&wlClientState);
 
     wlClientState.shouldClose = false;
     struct timespec time;
@@ -93,19 +60,8 @@ int main(int argc, char **argv) {
             wlClientState.display); // Waits for next event (Blocking)
         // wl_display_dispatch_pending(wlClientState.display); // Non-blocking
         // event polling
-        /*
-        draw_frame_gpu(&wlClientState);
-        wl_surface_commit(wlClientState.wl_surface);
-        clock_gettime(CLOCK_MONOTONIC, &time);
-        double currentTime = time.tv_nsec / 1.0e9f;
-        double elapsed = currentTime - wlClientState.last_frame;
-        double fps = 1.0f / elapsed;
-        verbose("dt=%f, fps=%f\n", elapsed, fps);
-        wlClientState.last_frame = currentTime;
-        */
     }
 
-exit:
     wayland_client_shutdown(&wlClientState);
     verbose("All resources freed!\n");
     verbose("Quiting program!\n");

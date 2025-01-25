@@ -7,6 +7,7 @@
 #include <string.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include "internals/callbacks/frame-done.h"
 #include "internals/listeners/registry.h"
 #include "internals/listeners/xdg-events/surface.h"
 #include "internals/listeners/xdg-events/toplevel.h"
@@ -121,6 +122,10 @@ int egl_create_opengl_context(WaylandClientContext *clientState) {
                    clientState->egl_surface, clientState->egl_context);
 
     return 1;
+}
+
+void wayland_init_rendering(WaylandClientContext *wlClientState) {
+    wl_surface_frame_done(wlClientState, NULL, 0);
 }
 
 void wayland_client_shutdown(WaylandClientContext *wlClientState) {

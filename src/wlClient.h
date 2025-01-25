@@ -11,6 +11,8 @@
 int wayland_client_initialize(WaylandClientContext *wlClientState);
 int egl_create_opengl_context(WaylandClientContext *clientState);
 
+void wayland_init_rendering(WaylandClientContext *wlClientState);
+
 void wayland_client_shutdown(WaylandClientContext *wlClientState);
 
 #endif // WAYLAND_H
