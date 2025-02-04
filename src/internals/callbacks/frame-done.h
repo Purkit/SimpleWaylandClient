@@ -1,7 +1,7 @@
 #ifndef WAYLAND_SURFACE_FRAME_DONE_CALLBACK
 #define WAYLAND_SURFACE_FRAME_DONE_CALLBACK
 
-#define VERBOSE 1
+// #define VERBOSE 1
 #include "../../utility.h"
 #include "../../wlClientState.h"
 #include <wayland-client-protocol.h>

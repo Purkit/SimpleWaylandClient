@@ -18,4 +18,4 @@ add_executable(
 )
 
 # cc -o client main.c xdg-shell-protocol.c xdg-decoration-protocol.c -lwayland-client -lrt -lxkbcommon
-target_link_libraries(WayClient PRIVATE wayland-client wayland-egl EGL rt xkbcommon)
+target_link_libraries(WayClient PRIVATE wayland-client wayland-egl EGL rt xkbcommon m)

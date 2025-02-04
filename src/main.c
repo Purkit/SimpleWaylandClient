@@ -1,4 +1,5 @@
 #include "glad/glad.h"
+#include "timer/timer_api.h"
 #include "wlClient.h"
 #include <assert.h>
 #include <bits/time.h>
@@ -7,6 +8,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
@@ -26,8 +30,12 @@ static void on_resize(struct WaylandClientContext *state) {
     glScissor(0, 0, state->width, state->height);
 }
 
-static void draw_frame_gpu(struct WaylandClientContext *state) {
-    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+static void draw_frame_gpu(struct WaylandClientContext *state, uint64_t now) {
+    float r = 0.5f + 0.5f * sin(now * 0.5f);
+    float g = 0.5f + 0.5f * sin(now * 0.7f);
+    float b = 0.5f + 0.5f * sin(now * 0.9f);
+    /*glClearColor(1.0f, 0.0f, 0.0f, 1.0f);*/
+    glClearColor(r, g, b, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 
     eglSwapBuffers(state->egl_display, state->egl_surface);
@@ -36,7 +44,8 @@ static void draw_frame_gpu(struct WaylandClientContext *state) {
 int main(int argc, char **argv) {
 
     WaylandClientContext wlClientState = {0};
-    wlClientState.width = 640;
+
+    wlClientState.width  = 640;
     wlClientState.height = 480;
 
     wlClientState.resize = on_resize;
@@ -48,18 +57,13 @@ int main(int argc, char **argv) {
 
     gladLoadGLLoader((GLADloadproc)eglGetProcAddress);
 
-    wayland_init_rendering(&wlClientState);
+    // wayland_init_rendering(&wlClientState);
 
     wlClientState.shouldClose = false;
-    struct timespec time;
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    wlClientState.last_frame = time.tv_nsec / 1.0e9f;
-    while (!wlClientState.shouldClose) {
 
-        wl_display_dispatch(
-            wlClientState.display); // Waits for next event (Blocking)
-        // wl_display_dispatch_pending(wlClientState.display); // Non-blocking
-        // event polling
+    while (!wlClientState.shouldClose) {
+        wayland_poll_events(&wlClientState);
+        draw_frame_gpu(&wlClientState, posixGetTime_sec());
     }
 
     wayland_client_shutdown(&wlClientState);

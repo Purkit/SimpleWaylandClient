@@ -1,5 +1,10 @@
 #include "wlClient.h"
+#include <errno.h>
+#include <poll.h>
 
+#include <stdbool.h>
+#include <sys/poll.h>
+#include <wayland-client-core.h>
 #include <wayland-egl-backend.h>
 #include <wayland-egl-core.h>
 #include <wayland-egl.h>
@@ -11,6 +16,8 @@
 #include "internals/listeners/registry.h"
 #include "internals/listeners/xdg-events/surface.h"
 #include "internals/listeners/xdg-events/toplevel.h"
+#include "posix_poll.h"
+#include "wlClientState.h"
 
 int wayland_client_initialize(WaylandClientContext *wlClientState) {
     wlClientState->display = wl_display_connect(NULL);
@@ -39,6 +46,75 @@ int wayland_client_initialize(WaylandClientContext *wlClientState) {
             wlClientState->xdg_decoration_manager, wlClientState->xdg_toplevel);
     wl_surface_commit(wlClientState->wl_surface);
     return 1;
+}
+
+static int _client_display_flush(WaylandClientContext *wlClientState) {
+    // we call wl_display_flush till all the buffered data in client side
+    // is send to the compositor.
+    while (wl_display_flush(wlClientState->display) == -1) {
+        // if errno = EAGAIN, we poll the display fd to wait for it to become
+        // writable again.
+        if (errno != EAGAIN)
+            return 0;
+
+        struct pollfd fd = {wl_display_get_fd(wlClientState->display), POLLOUT};
+
+        while (poll(&fd, 1, -1) == -1) {
+            if (errno != EINTR && errno != EAGAIN)
+                return 0;
+        }
+    }
+
+    return 1;
+}
+
+static void _poll_events(WaylandClientContext *wlClientState, double *timeout) {
+    int done = 0;
+
+    struct pollfd fd = {wl_display_get_fd(wlClientState->display), POLLIN};
+
+    while (!done) {
+
+        while (wl_display_prepare_read(wlClientState->display) != 0) {
+            if (wl_display_dispatch_pending(wlClientState->display) > 0)
+                return;
+        }
+
+        int flash_status = _client_display_flush(wlClientState);
+        if (flash_status == 0) {
+            // Broke frozen state
+            wl_display_cancel_read(wlClientState->display);
+
+            wlClientState->shouldClose = true;
+            return;
+        }
+
+        int poll_status = _posixPoll(&fd, 1, timeout);
+        if (poll_status == 0) {
+            wl_display_cancel_read(wlClientState->display);
+            return;
+        }
+
+        if (fd.revents & POLLIN) {
+            wl_display_read_events(wlClientState->display);
+            if (wl_display_dispatch_pending(wlClientState->display) > 0)
+                done = 1;
+        }
+    }
+}
+
+void wayland_poll_events(WaylandClientContext *wlClientState) {
+    double timeout = 0.0;
+    _poll_events(wlClientState, &timeout);
+}
+
+void wayland_wait_for_event(WaylandClientContext *wlClientState) {
+    _poll_events(wlClientState, NULL);
+}
+
+void wayland_wait_for_event_till(WaylandClientContext *wlClientState,
+                                 double timeout) {
+    _poll_events(wlClientState, &timeout);
 }
 
 static const EGLint egl_attrib_list[] = {
