@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-uint64_t posixGetTime_sec();
+double posixGetTime_sec();
 uint64_t posixGetTime_ms();
 uint64_t posixGetTime_us();
 uint64_t posixGetTime_ns();
