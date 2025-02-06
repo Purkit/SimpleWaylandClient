@@ -10,12 +10,13 @@
 static void xdg_toplevel_configure_event_handler(
     void *data, struct xdg_toplevel *xdg_toplevel, int32_t width,
     int32_t height, struct wl_array *states) {
-    verbose("xdg_toplevel::configure event recieved!\n");
     struct WaylandClientContext *state = (struct WaylandClientContext *)data;
-    state->width = width;
+
+    state->width  = width;
     state->height = height;
-    // on_resize(state);
-    state->resize(state);
+
+    if (state->callbacks.resize)
+        state->callbacks.resize(state);
 }
 
 static void
@@ -23,7 +24,7 @@ xdg_toplevel_close_event_handler(void *data,
                                  struct xdg_toplevel *xdg_toplevel) {
     verbose("close button clicked!\n");
     struct WaylandClientContext *state = (struct WaylandClientContext *)data;
-    state->shouldClose = true;
+    state->shouldClose                 = true;
 }
 
 static void

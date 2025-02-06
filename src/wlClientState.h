@@ -29,11 +29,16 @@ typedef struct WaylandClientContext {
     struct wl_touch *wl_touch;
 
     // State
-    double last_frame;
+    double last_frame_time;
     int width, height;
     bool shouldClose;
-    char mouseButtonState[MOUSE_BUTTON_COUNT];
-    char keyState[KEY_COUNT];
+    bool isKeyRepeat_on;
+    int32_t keyRepeat_rate;
+    int32_t keyRepeat_delay;
+    uint32_t last_keyPress_time;
+    float current_mouse_x, current_mouse_y;
+    KeyState mouseButtonState[MOUSE_BUTTON_COUNT];
+    KeyState keyState[KEY_COUNT];
 
     struct wl_callback *redraw_signal_callback;
     struct pointer_event pointer_event;
@@ -50,8 +55,10 @@ typedef struct WaylandClientContext {
     struct wl_egl_window *egl_window;
 
     // Callbacks:
-    void (*resize)(struct WaylandClientContext *);
-    void (*render)(struct WaylandClientContext *, uint64_t);
+    struct {
+        void (*resize)(struct WaylandClientContext *);
+        void (*render)(struct WaylandClientContext *, double);
+    } callbacks;
 
 } WaylandClientContext;
 

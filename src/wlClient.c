@@ -16,6 +16,7 @@
 #include "internals/listeners/registry.h"
 #include "internals/listeners/xdg-events/surface.h"
 #include "internals/listeners/xdg-events/toplevel.h"
+#include "keycodes.h"
 #include "posix_poll.h"
 #include "wlClientState.h"
 
@@ -230,4 +231,42 @@ void wayland_client_shutdown(WaylandClientContext *wlClientState) {
     }
     wl_seat_release(wlClientState->wl_seat);
     wl_display_disconnect(wlClientState->display);
+}
+
+KeyState getKeyState(WaylandClientContext *clientState, KeyCode key) {
+    return clientState->keyState[key];
+}
+KeyState getMouseButtonState(WaylandClientContext *clientState,
+                             MouseButtons btn) {
+    return clientState->mouseButtonState[btn];
+}
+
+bool isKeyPressed(WaylandClientContext *clientState, KeyCode key) {
+    return (clientState->keyState[key] == PRESSED);
+}
+
+bool isKeyReleased(WaylandClientContext *clientState, KeyCode key) {
+    return false;
+}
+
+bool isMouseButtonPressed(WaylandClientContext *clientState, MouseButtons btn) {
+    return (clientState->mouseButtonState[btn] == PRESSED);
+}
+
+bool isMouseButtonReleased(WaylandClientContext *clientState,
+                           MouseButtons btn) {
+    return false;
+}
+
+void getMousePos(WaylandClientContext *clientState, float *x, float *y) {
+    *x = clientState->current_mouse_x;
+    *y = clientState->current_mouse_y;
+}
+
+float getMouseX(WaylandClientContext *clientState) {
+    return clientState->current_mouse_x;
+}
+
+float getMouseY(WaylandClientContext *clientState) {
+    return clientState->current_mouse_y;
 }

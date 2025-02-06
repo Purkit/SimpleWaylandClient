@@ -3,6 +3,7 @@
 
 #include "../../../utility.h"
 #include "../../../wlClientState.h"
+#include "../../internal_api.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -31,7 +32,7 @@ static void wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
     xkb_keymap_unref(client_state->xkb_keymap);
     xkb_state_unref(client_state->xkb_state);
     client_state->xkb_keymap = xkb_keymap;
-    client_state->xkb_state = xkb_state;
+    client_state->xkb_state  = xkb_state;
 }
 
 static void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
@@ -57,17 +58,19 @@ static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
                             uint32_t serial, uint32_t time, uint32_t key,
                             uint32_t state) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    char buf[128];
-    uint32_t keycode = key + 8;
-    xkb_keysym_t sym =
-        xkb_state_key_get_one_sym(client_state->xkb_state, keycode);
-    xkb_keysym_get_name(sym, buf, sizeof(buf));
-    const char *action =
-        state == WL_KEYBOARD_KEY_STATE_PRESSED ? "press" : "release";
-    verbose("key %s: sym: %-12s (%d) [RAW: %d, +8: %d], ", action, buf, sym,
-            key, keycode);
-    xkb_state_key_get_utf8(client_state->xkb_state, keycode, buf, sizeof(buf));
-    verbose("utf8: '%s'\n", buf);
+
+    const KeyCode key_code = _getOurKeyCode_from_xkb_keysym(
+        xkb_state_key_get_one_sym(client_state->xkb_state, key + 8));
+    const KeyState key_state =
+        (state == WL_KEYBOARD_KEY_STATE_PRESSED ? PRESSED : UNPRESSED);
+    _registerKeyState(client_state, key_code, key_state);
+
+    char buf[2];
+    if (xkb_state_key_get_utf8(client_state->xkb_state, key + 8, buf,
+                               sizeof(buf)) != 0) {
+        // TODO: call get_character callback from here
+        verbose("utf8: '%s'\n", buf);
+    }
 }
 
 static void wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
@@ -86,7 +89,10 @@ static void wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
 
 static void wl_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
                                     int32_t rate, int32_t delay) {
-    verbose("wl_keyboard::repeat_info event fired!\n");
+    WaylandClientContext *client_state = (WaylandClientContext *)data;
+
+    client_state->keyRepeat_rate  = rate;
+    client_state->keyRepeat_delay = delay;
 }
 
 #endif // KEYBOARD_CALLBACKS

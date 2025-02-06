@@ -23,16 +23,17 @@ void wayland_init_rendering(WaylandClientContext *wlClientState);
 void wayland_client_shutdown(WaylandClientContext *wlClientState);
 
 // Input polling
-int getKeyState(KeyCode key);
-int getMouseButtonState(MouseButtons btn);
+KeyState getKeyState(WaylandClientContext *clientState, KeyCode key);
+KeyState getMouseButtonState(WaylandClientContext *clientState,
+                             MouseButtons btn);
 
-int isKeyPressed(KeyCode key);
-int isKeyReleased(KeyCode key);
-int isMouseButtonPressed(MouseButtons btn);
-int isMouseButtonReleased(MouseButtons btn);
+bool isKeyPressed(WaylandClientContext *clientState, KeyCode key);
+bool isKeyReleased(WaylandClientContext *clientState, KeyCode key);
+bool isMouseButtonPressed(WaylandClientContext *clientState, MouseButtons btn);
+bool isMouseButtonReleased(WaylandClientContext *clientState, MouseButtons btn);
 
-void getMousePos(float *x, float *y);
-float getMouseX();
-float getMouseY();
+void getMousePos(WaylandClientContext *clientState, float *x, float *y);
+float getMouseX(WaylandClientContext *clientState);
+float getMouseY(WaylandClientContext *clientState);
 
 #endif // WAYLAND_H

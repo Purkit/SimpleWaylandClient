@@ -13,12 +13,9 @@ void wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t time) {
     wl_callback_add_listener(state->redraw_signal_callback,
                              &wl_surface_frame_listener, state);
 
-    float time_secs = time * 1e-3f;
-    float elapsed   = time_secs - state->last_frame;
-    float fps       = 1.0f / elapsed;
-    verbose("dt=%f, fps=%f\n", elapsed, fps);
+    double time_secs = time * 1e-3f;
 
-    state->render(state, time_secs);
+    state->callbacks.render(state, time_secs);
     wl_surface_commit(state->wl_surface);
-    state->last_frame = time_secs;
+    state->last_frame_time = time_secs;
 }

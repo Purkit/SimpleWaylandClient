@@ -1,4 +1,6 @@
 #include "glad/glad.h"
+#include "internals/internal_api.h"
+#include "keycodes.h"
 #include "timer/timer_api.h"
 #include "wlClient.h"
 #include <assert.h>
@@ -9,10 +11,7 @@
 #include <stdint.h>
 
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/mman.h>
-#include <time.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
@@ -30,7 +29,7 @@ static void on_resize(struct WaylandClientContext *state) {
     glScissor(0, 0, state->width, state->height);
 }
 
-static void draw_frame_gpu(struct WaylandClientContext *state, uint64_t now) {
+static void draw_frame_gpu(struct WaylandClientContext *state, double now) {
     float r = 0.5f + 0.5f * sin(now * 0.5f);
     float g = 0.5f + 0.5f * sin(now * 0.7f);
     float b = 0.5f + 0.5f * sin(now * 0.9f);
@@ -48,8 +47,8 @@ int main(int argc, char **argv) {
     wlClientState.width  = 640;
     wlClientState.height = 480;
 
-    wlClientState.resize = on_resize;
-    wlClientState.render = draw_frame_gpu;
+    wlClientState.callbacks.resize = on_resize;
+    wlClientState.callbacks.render = draw_frame_gpu;
 
     wayland_client_initialize(&wlClientState);
 
@@ -57,13 +56,20 @@ int main(int argc, char **argv) {
 
     gladLoadGLLoader((GLADloadproc)eglGetProcAddress);
 
-    // wayland_init_rendering(&wlClientState);
+    wayland_init_rendering(&wlClientState);
 
     wlClientState.shouldClose = false;
 
+    if (isKeyPressed(&wlClientState, KEY_A))
+        verbose("A Pressed!\n");
+
     while (!wlClientState.shouldClose) {
         wayland_poll_events(&wlClientState);
-        draw_frame_gpu(&wlClientState, posixGetTime_sec());
+        /*draw_frame_gpu(&wlClientState, posixGetTime_sec());*/
+        /*if (getKeyState(&wlClientState, KEY_A) == PRESSED)
+            verbose("KEY A Pressed!\n");*/
+        if (isKeyPressed(&wlClientState, KEY_A))
+            verbose("A Pressed!\n");
     }
 
     wayland_client_shutdown(&wlClientState);
