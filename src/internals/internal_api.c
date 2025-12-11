@@ -2,6 +2,16 @@
 #include <string.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 
+// These codes are copied from
+// linux/input-event-codes.h
+// This header is not included
+// directly because our custom
+// key codes conflicts with codes
+// defined in it.
+#define BTN_LEFT   0x110
+#define BTN_RIGHT  0x111
+#define BTN_MIDDLE 0x112
+
 KeyCode _getOurKeyCode_from_xkb_keysym(xkb_keysym_t sym) {
     switch (sym) {
         case XKB_KEY_a:
@@ -147,6 +157,16 @@ KeyCode _getOurKeyCode_from_xkb_keysym(xkb_keysym_t sym) {
     return KEY_UNKNOWN;
 }
 
+MouseButtonCode _getOurMouseBtnCode_from_linux_event_code(uint32_t btn) {
+    switch (btn) {
+        case BTN_LEFT:   return MOUSE_BUTTON_LEFT;
+        case BTN_RIGHT:  return MOUSE_BUTTON_RIGHT;
+        case BTN_MIDDLE: return MOUSE_BUTTON_MIDDLE;
+    }
+
+    return MOUSE_BUTTON_UNKNOWN;
+}
+
 void _registerKeyState(WaylandClientContext *clientState, KeyCode key,
                        KeyState state) {
     clientState->keyState[key] = state;
@@ -156,12 +176,17 @@ void _resetKeyState(WaylandClientContext *clientState) {
     memset(clientState->keyState, 0, sizeof(clientState->keyState));
 }
 
-void _registerMouseBtnState(WaylandClientContext *clientState, MouseButtons btn,
-                            KeyState state) {
+void _registerMouseBtnState(WaylandClientContext *clientState,
+                            MouseButtonCode btn, KeyState state) {
     clientState->mouseButtonState[btn] = state;
 }
 
 void _resetMouseBtnState(WaylandClientContext *clientState) {
     memset(clientState->mouseButtonState, 0,
            sizeof(clientState->mouseButtonState));
+}
+
+void _updateMousePos(WaylandClientContext *clientState, float x, float y) {
+    clientState->current_mouse_x = x;
+    clientState->current_mouse_y = y;
 }

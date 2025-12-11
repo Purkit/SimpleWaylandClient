@@ -16,6 +16,6 @@ void wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t time) {
     double time_secs = time * 1e-3f;
 
     state->callbacks.render(state, time_secs);
-    wl_surface_commit(state->wl_surface);
+    /*wl_surface_commit(state->wl_surface);*/
     state->last_frame_time = time_secs;
 }

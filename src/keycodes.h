@@ -3,7 +3,9 @@
 
 typedef enum KeyState { UNPRESSED = 0, PRESSED = 1 } KeyState;
 
-/*typedef enum KeyAction { KEY_PRESSED = 1, KEY_RELEASED = -1 } KeyAction;*/
+typedef enum KeyAction { KEY_PRESSED = 1, KEY_RELEASED = -1 } KeyAction;
+
+typedef enum ScrollDir { SCROLL_UP = 9, SCROLL_DOWN = -9 } ScrollDir;
 
 typedef enum KeyCode {
     KEY_UNKNOWN = 0,
@@ -124,12 +126,13 @@ typedef enum KeyCode {
     KEY_COUNT
 } KeyCode;
 
-typedef enum MouseButtons {
-    MOUSE_BUTTON_LEFT   = 0,
-    MOUSE_BUTTON_RIGHT  = 1,
-    MOUSE_BUTTON_MIDDLE = 2,
+typedef enum MouseButtonCode {
+    MOUSE_BUTTON_UNKNOWN = 0,
+    MOUSE_BUTTON_LEFT    = 1,
+    MOUSE_BUTTON_RIGHT   = 2,
+    MOUSE_BUTTON_MIDDLE  = 3,
     MOUSE_BUTTON_COUNT
-} MouseButtons;
+} MouseButtonCode;
 
 typedef enum ModifierKeys {
     SHIFT,

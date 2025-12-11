@@ -63,7 +63,13 @@ static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
         xkb_state_key_get_one_sym(client_state->xkb_state, key + 8));
     const KeyState key_state =
         (state == WL_KEYBOARD_KEY_STATE_PRESSED ? PRESSED : UNPRESSED);
+    const KeyAction action =
+        (state == WL_KEYBOARD_KEY_STATE_RELEASED ? KEY_RELEASED : KEY_PRESSED);
     _registerKeyState(client_state, key_code, key_state);
+
+    if (client_state->callbacks.key_event) {
+        client_state->callbacks.key_event(client_state, key_code, action);
+    }
 
     char buf[2];
     if (xkb_state_key_get_utf8(client_state->xkb_state, key + 8, buf,
@@ -75,7 +81,7 @@ static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
 
 static void wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
                               uint32_t serial, struct wl_surface *surface) {
-    verbose("keyboard leave\n");
+    // verbose("keyboard leave\n");
 }
 
 static void wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,

@@ -16,8 +16,11 @@
 #include "internals/listeners/registry.h"
 #include "internals/listeners/xdg-events/surface.h"
 #include "internals/listeners/xdg-events/toplevel.h"
+#include "internals/protocols/relative-pointer-protocol.h"
+#include "internals/protocols/xdg-shell-client-protocol.h"
 #include "keycodes.h"
 #include "posix_poll.h"
+#include "utility.h"
 #include "wlClientState.h"
 
 int wayland_client_initialize(WaylandClientContext *wlClientState) {
@@ -42,10 +45,20 @@ int wayland_client_initialize(WaylandClientContext *wlClientState) {
     xdg_toplevel_add_listener(wlClientState->xdg_toplevel,
                               &xdg_toplevel_events_listener, wlClientState);
     xdg_toplevel_set_title(wlClientState->xdg_toplevel, "hello wayland new");
+    xdg_toplevel_set_app_id(wlClientState->xdg_toplevel, "wl_test_client");
     wlClientState->xdg_toplevel_decoration =
         zxdg_decoration_manager_v1_get_toplevel_decoration(
             wlClientState->xdg_decoration_manager, wlClientState->xdg_toplevel);
+
     wl_surface_commit(wlClientState->wl_surface);
+    wl_display_roundtrip(wlClientState->display);
+
+    wlClientState->relative_pointer =
+        zwp_relative_pointer_manager_v1_get_relative_pointer(
+            wlClientState->relative_pointer_manager, wlClientState->wl_pointer);
+    zwp_relative_pointer_v1_add_listener(wlClientState->relative_pointer,
+                                         &relative_pointer_listener,
+                                         wlClientState);
     return 1;
 }
 
@@ -220,6 +233,9 @@ void wayland_client_shutdown(WaylandClientContext *wlClientState) {
     xdg_surface_destroy(wlClientState->xdg_surface);
     xdg_wm_base_destroy(wlClientState->xdg_wm_base);
     wl_surface_destroy(wlClientState->wl_surface);
+    zwp_relative_pointer_v1_destroy(wlClientState->relative_pointer);
+    zwp_relative_pointer_manager_v1_destroy(
+        wlClientState->relative_pointer_manager);
     if (wlClientState->wl_keyboard != NULL) {
         wl_keyboard_release(wlClientState->wl_keyboard);
     }
@@ -237,7 +253,7 @@ KeyState getKeyState(WaylandClientContext *clientState, KeyCode key) {
     return clientState->keyState[key];
 }
 KeyState getMouseButtonState(WaylandClientContext *clientState,
-                             MouseButtons btn) {
+                             MouseButtonCode btn) {
     return clientState->mouseButtonState[btn];
 }
 
@@ -249,12 +265,13 @@ bool isKeyReleased(WaylandClientContext *clientState, KeyCode key) {
     return false;
 }
 
-bool isMouseButtonPressed(WaylandClientContext *clientState, MouseButtons btn) {
+bool isMouseButtonPressed(WaylandClientContext *clientState,
+                          MouseButtonCode btn) {
     return (clientState->mouseButtonState[btn] == PRESSED);
 }
 
 bool isMouseButtonReleased(WaylandClientContext *clientState,
-                           MouseButtons btn) {
+                           MouseButtonCode btn) {
     return false;
 }
 
@@ -270,3 +287,34 @@ float getMouseX(WaylandClientContext *clientState) {
 float getMouseY(WaylandClientContext *clientState) {
     return clientState->current_mouse_y;
 }
+
+void set_window_title(WaylandClientContext *clientState, const char *title) {
+    xdg_toplevel_set_title(clientState->xdg_toplevel, title);
+}
+
+void maximize_window(WaylandClientContext *clientState) {
+    xdg_toplevel_set_maximized(clientState->xdg_toplevel);
+}
+
+void unmaximize_window(WaylandClientContext *clientState) {
+    xdg_toplevel_unset_maximized(clientState->xdg_toplevel);
+}
+
+void minimize_window(WaylandClientContext *clientState) {
+    xdg_toplevel_set_minimized(clientState->xdg_toplevel);
+}
+
+void set_maximum_size(WaylandClientContext *clientState, int32_t width,
+                      int32_t height) {
+    xdg_toplevel_set_max_size(clientState->xdg_toplevel, width, height);
+}
+
+void set_minimum_size(WaylandClientContext *clientState, int32_t width,
+                      int32_t height) {
+    xdg_toplevel_set_min_size(clientState->xdg_toplevel, width, height);
+}
+
+void make_fullscreen(WaylandClientContext *clientState) {
+    xdg_toplevel_set_fullscreen(clientState->xdg_toplevel, NULL);
+}
+void undo_fullscreen(WaylandClientContext *clientState);

@@ -3,6 +3,7 @@
 
 #include "../../../utility.h"
 #include "../../../wlClientState.h"
+#include "../../internal_api.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,13 +15,13 @@
 #include <xkbcommon/xkbcommon.h>
 
 enum pointer_event_mask {
-    POINTER_EVENT_ENTER = 1 << 0,
-    POINTER_EVENT_LEAVE = 1 << 1,
-    POINTER_EVENT_MOTION = 1 << 2,
-    POINTER_EVENT_BUTTON = 1 << 3,
-    POINTER_EVENT_AXIS = 1 << 4,
-    POINTER_EVENT_AXIS_SOURCE = 1 << 5,
-    POINTER_EVENT_AXIS_STOP = 1 << 6,
+    POINTER_EVENT_ENTER         = 1 << 0,
+    POINTER_EVENT_LEAVE         = 1 << 1,
+    POINTER_EVENT_MOTION        = 1 << 2,
+    POINTER_EVENT_BUTTON        = 1 << 3,
+    POINTER_EVENT_AXIS          = 1 << 4,
+    POINTER_EVENT_AXIS_SOURCE   = 1 << 5,
+    POINTER_EVENT_AXIS_STOP     = 1 << 6,
     POINTER_EVENT_AXIS_DISCRETE = 1 << 7,
 };
 
@@ -29,7 +30,7 @@ static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
                              wl_fixed_t surface_x, wl_fixed_t surface_y) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_ENTER;
-    client_state->pointer_event.serial = serial;
+    client_state->pointer_event.serial    = serial;
     client_state->pointer_event.surface_x = surface_x,
     client_state->pointer_event.surface_y = surface_y;
 }
@@ -46,7 +47,7 @@ static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
                               wl_fixed_t surface_y) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_MOTION;
-    client_state->pointer_event.time = time;
+    client_state->pointer_event.time      = time;
     client_state->pointer_event.surface_x = surface_x,
     client_state->pointer_event.surface_y = surface_y;
 }
@@ -56,17 +57,17 @@ static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
                               uint32_t state) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_BUTTON;
-    client_state->pointer_event.time = time;
+    client_state->pointer_event.time   = time;
     client_state->pointer_event.serial = serial;
     client_state->pointer_event.button = button,
-    client_state->pointer_event.state = state;
+    client_state->pointer_event.state  = state;
 }
 
 static void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
                             uint32_t time, uint32_t axis, wl_fixed_t value) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS;
-    client_state->pointer_event.time = time;
+    client_state->pointer_event.time             = time;
     client_state->pointer_event.axes[axis].valid = true;
     client_state->pointer_event.axes[axis].value = value;
 }
@@ -81,7 +82,7 @@ static void wl_pointer_axis_source(void *data, struct wl_pointer *wl_pointer,
 static void wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
                                  uint32_t time, uint32_t axis) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.time = time;
+    client_state->pointer_event.time   = time;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_STOP;
     client_state->pointer_event.axes[axis].valid = true;
 }
@@ -90,7 +91,7 @@ static void wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
                                      uint32_t axis, int32_t discrete) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
     client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_DISCRETE;
-    client_state->pointer_event.axes[axis].valid = true;
+    client_state->pointer_event.axes[axis].valid    = true;
     client_state->pointer_event.axes[axis].discrete = discrete;
 }
 
@@ -165,28 +166,41 @@ static void wl_pointer_relative_direction_event(void *data,
 
 static void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    struct pointer_event *event = &client_state->pointer_event;
-    verbose("pointer frame @ %d: ", event->time);
+    struct pointer_event *event        = &client_state->pointer_event;
+    /*verbose("pointer frame @ %d: ", event->time);*/
 
     if (event->event_mask & POINTER_EVENT_ENTER) {
-        verbose("entered %f, %f ", wl_fixed_to_double(event->surface_x),
-                wl_fixed_to_double(event->surface_y));
+        // verbose("entered %f, %f ", wl_fixed_to_double(event->surface_x),
+        // wl_fixed_to_double(event->surface_y));
     }
 
     if (event->event_mask & POINTER_EVENT_LEAVE) {
-        verbose("leave");
+        // verbose("leave");
     }
 
     if (event->event_mask & POINTER_EVENT_MOTION) {
-        verbose("motion %f, %f ", wl_fixed_to_double(event->surface_x),
-                wl_fixed_to_double(event->surface_y));
+        float x = wl_fixed_to_double(event->surface_x);
+        float y = wl_fixed_to_double(event->surface_y);
+        _updateMousePos(client_state, x, y);
+        if (client_state->callbacks.mouse_motion) {
+            client_state->callbacks.mouse_motion(client_state, x, y);
+        }
     }
 
     if (event->event_mask & POINTER_EVENT_BUTTON) {
-        const char *state = event->state == WL_POINTER_BUTTON_STATE_RELEASED
-                                ? "released"
-                                : "pressed";
-        verbose("button %d %s ", event->button, state);
+
+        const MouseButtonCode btn =
+            _getOurMouseBtnCode_from_linux_event_code(event->button);
+        const KeyState state =
+            (event->state == WL_POINTER_BUTTON_STATE_RELEASED ? UNPRESSED
+                                                              : PRESSED);
+        const KeyAction action =
+            (event->state == WL_POINTER_BUTTON_STATE_RELEASED ? KEY_RELEASED
+                                                              : KEY_PRESSED);
+        _registerMouseBtnState(client_state, btn, state);
+        if (client_state->callbacks.mouse_btn_event) {
+            client_state->callbacks.mouse_btn_event(client_state, btn, action);
+        }
     }
 
     uint32_t axis_events = POINTER_EVENT_AXIS | POINTER_EVENT_AXIS_SOURCE |
@@ -223,7 +237,6 @@ static void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
         }
     }
 
-    verbose("\n");
     memset(event, 0, sizeof(*event));
 }
 

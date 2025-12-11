@@ -5,6 +5,7 @@
 #include <string.h>
 #include <wayland-client-protocol.h>
 
+#include "../protocols/relative-pointer-protocol.h"
 #include "../protocols/xdg-decoration-protocol.h"
 #include "../protocols/xdg-shell-client-protocol.h"
 
@@ -19,24 +20,31 @@ static void registry_global_event_handler(void *data,
     WaylandClientContext *state = (WaylandClientContext *)data;
     if (strcmp(interface_string, wl_compositor_interface.name) == 0) {
         state->compositor = (struct wl_compositor *)wl_registry_bind(
-            registry, name, &wl_compositor_interface, 6);
-    } else if (strcmp(interface_string, wl_shm_interface.name) == 0) {
-        state->shm = (struct wl_shm *)wl_registry_bind(registry, name,
-                                                       &wl_shm_interface, 1);
-    } else if (strcmp(interface_string, xdg_wm_base_interface.name) == 0) {
+            registry, name, &wl_compositor_interface, version);
+    } /*else if (strcmp(interface_string, wl_shm_interface.name) == 0) {
+        state->shm = (struct wl_shm *)wl_registry_bind(
+            registry, name, &wl_shm_interface, version);
+    }*/
+    else if (strcmp(interface_string, xdg_wm_base_interface.name) == 0) {
         state->xdg_wm_base = (struct xdg_wm_base *)wl_registry_bind(
-            registry, name, &xdg_wm_base_interface, 6);
+            registry, name, &xdg_wm_base_interface, version);
         xdg_wm_base_add_listener(state->xdg_wm_base, &xdg_wm_base_listener,
                                  state);
     } else if (strcmp(interface_string, wl_seat_interface.name) == 0) {
         state->wl_seat = (struct wl_seat *)wl_registry_bind(
-            registry, name, &wl_seat_interface, 9);
+            registry, name, &wl_seat_interface, version);
         wl_seat_add_listener(state->wl_seat, &wl_seat_listener, state);
     } else if (strcmp(interface_string,
                       zxdg_decoration_manager_v1_interface.name) == 0) {
         state->xdg_decoration_manager =
             (struct zxdg_decoration_manager_v1 *)wl_registry_bind(
-                registry, name, &zxdg_decoration_manager_v1_interface, 1);
+                registry, name, &zxdg_decoration_manager_v1_interface, version);
+    } else if (strcmp(interface_string,
+                      zwp_relative_pointer_manager_v1_interface.name) == 0) {
+        state->relative_pointer_manager =
+            (struct zwp_relative_pointer_manager_v1 *)wl_registry_bind(
+                registry, name, &zwp_relative_pointer_manager_v1_interface,
+                version);
     }
 }
 
