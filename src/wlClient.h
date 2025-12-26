@@ -1,6 +1,10 @@
 #ifndef WAYLAND_H
 #define WAYLAND_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "keycodes.h"
 #include "wlClientState.h"
 
@@ -22,6 +26,9 @@ int egl_create_opengl_context(WaylandClientContext *clientState);
 void wayland_init_rendering(WaylandClientContext *wlClientState);
 
 void wayland_client_shutdown(WaylandClientContext *wlClientState);
+
+void lock_cursor(WaylandClientContext *wlClientState);
+void unlock_cursor(WaylandClientContext *wlClientState);
 
 // Input polling
 KeyState getKeyState(WaylandClientContext *clientState, KeyCode key);
@@ -52,5 +59,9 @@ void set_minimum_size(WaylandClientContext *clientState, int32_t width,
                       int32_t height);
 void make_fullscreen(WaylandClientContext *clientState);
 void undo_fullscreen(WaylandClientContext *clientState);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // WAYLAND_H

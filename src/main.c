@@ -1,5 +1,4 @@
 #include "glad/glad.h"
-#include "internals/internal_api.h"
 #include "keycodes.h"
 #include "wlClient.h"
 #include <assert.h>

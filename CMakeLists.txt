@@ -44,6 +44,15 @@ execute_process(
     OUTPUT_VARIABLE output
     ERROR_VARIABLE error_output
 )
+execute_process(
+    COMMAND wayland-scanner
+            client-header
+            /usr/share/wayland-protocols/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml
+            ${PROJECT_SOURCE_DIR}/src/internals/protocols/pointer-constraints-protocol.h
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error_output
+)
 
 execute_process(
     COMMAND wayland-scanner
@@ -81,7 +90,15 @@ execute_process(
     OUTPUT_VARIABLE output
     ERROR_VARIABLE error_output
 )
-
+execute_process(
+    COMMAND wayland-scanner
+            public-code
+            /usr/share/wayland-protocols/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml
+            ${PROJECT_SOURCE_DIR}/src/internals/protocols/pointer-constraints-protocol.c
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error_output
+)
 
 file(GLOB_RECURSE WAYLAND_CLIENT_APPLICATION_SOURCES ${PROJECT_SOURCE_DIR}/src/*.c)
 

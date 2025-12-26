@@ -5,6 +5,7 @@
 #include <string.h>
 #include <wayland-client-protocol.h>
 
+#include "../protocols/pointer-constraints-protocol.h"
 #include "../protocols/relative-pointer-protocol.h"
 #include "../protocols/xdg-decoration-protocol.h"
 #include "../protocols/xdg-shell-client-protocol.h"
@@ -45,12 +46,18 @@ static void registry_global_event_handler(void *data,
             (struct zwp_relative_pointer_manager_v1 *)wl_registry_bind(
                 registry, name, &zwp_relative_pointer_manager_v1_interface,
                 version);
+    } else if (strcmp(interface_string,
+                      zwp_pointer_constraints_v1_interface.name) == 0) {
+        state->pointer_constraint_manager =
+            (struct zwp_pointer_constraints_v1 *)wl_registry_bind(
+                registry, name, &zwp_pointer_constraints_v1_interface, version);
     }
 }
 
 static void registry_global_remove(void *data, struct wl_registry *registry,
                                    uint32_t name) {
     // handle this
+    verbose("\nregistry global remove event fired!");
 }
 
 #endif // ! REGISTRY_HANDLER_CALLBACKS

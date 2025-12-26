@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <sys/poll.h>
 #include <wayland-client-core.h>
+#include <wayland-client-protocol.h>
 #include <wayland-egl-backend.h>
 #include <wayland-egl-core.h>
 #include <wayland-egl.h>
@@ -16,6 +17,7 @@
 #include "internals/listeners/registry.h"
 #include "internals/listeners/xdg-events/surface.h"
 #include "internals/listeners/xdg-events/toplevel.h"
+#include "internals/protocols/pointer-constraints-protocol.h"
 #include "internals/protocols/relative-pointer-protocol.h"
 #include "internals/protocols/xdg-shell-client-protocol.h"
 #include "keycodes.h"
@@ -60,6 +62,26 @@ int wayland_client_initialize(WaylandClientContext *wlClientState) {
                                          &relative_pointer_listener,
                                          wlClientState);
     return 1;
+}
+
+void lock_cursor(WaylandClientContext *wlClientState) {
+    if (!wlClientState->locaked_pointer) {
+        wlClientState->locaked_pointer =
+            zwp_pointer_constraints_v1_lock_pointer(
+                wlClientState->pointer_constraint_manager,
+                wlClientState->wl_surface, wlClientState->wl_pointer, NULL,
+                ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+        zwp_locked_pointer_v1_set_cursor_position_hint(
+            wlClientState->locaked_pointer,
+            wl_fixed_from_int(wlClientState->width / 2),
+            wl_fixed_from_int(wlClientState->height / 2));
+    }
+}
+
+void unlock_cursor(WaylandClientContext *wlClientState) {
+    if (wlClientState->locaked_pointer)
+        zwp_locked_pointer_v1_destroy(wlClientState->locaked_pointer);
+    wlClientState->locaked_pointer = NULL;
 }
 
 static int _client_display_flush(WaylandClientContext *wlClientState) {
@@ -229,23 +251,29 @@ void wayland_client_shutdown(WaylandClientContext *wlClientState) {
 
     zxdg_toplevel_decoration_v1_destroy(wlClientState->xdg_toplevel_decoration);
     zxdg_decoration_manager_v1_destroy(wlClientState->xdg_decoration_manager);
+
     xdg_toplevel_destroy(wlClientState->xdg_toplevel);
     xdg_surface_destroy(wlClientState->xdg_surface);
     xdg_wm_base_destroy(wlClientState->xdg_wm_base);
     wl_surface_destroy(wlClientState->wl_surface);
+
     zwp_relative_pointer_v1_destroy(wlClientState->relative_pointer);
     zwp_relative_pointer_manager_v1_destroy(
         wlClientState->relative_pointer_manager);
-    if (wlClientState->wl_keyboard != NULL) {
+
+    zwp_pointer_constraints_v1_destroy(
+        wlClientState->pointer_constraint_manager);
+
+    if (wlClientState->wl_keyboard)
         wl_keyboard_release(wlClientState->wl_keyboard);
-    }
-    if (wlClientState->wl_pointer != NULL) {
+    if (wlClientState->wl_pointer)
         wl_pointer_release(wlClientState->wl_pointer);
-    }
-    if (wlClientState->wl_touch != NULL) {
+    if (wlClientState->wl_touch)
         wl_touch_release(wlClientState->wl_touch);
-    }
     wl_seat_release(wlClientState->wl_seat);
+
+    wl_compositor_destroy(wlClientState->compositor);
+    wl_registry_destroy(wlClientState->registry);
     wl_display_disconnect(wlClientState->display);
 }
 
@@ -317,4 +345,6 @@ void set_minimum_size(WaylandClientContext *clientState, int32_t width,
 void make_fullscreen(WaylandClientContext *clientState) {
     xdg_toplevel_set_fullscreen(clientState->xdg_toplevel, NULL);
 }
-void undo_fullscreen(WaylandClientContext *clientState);
+void undo_fullscreen(WaylandClientContext *clientState) {
+    xdg_toplevel_unset_fullscreen(clientState->xdg_toplevel);
+}

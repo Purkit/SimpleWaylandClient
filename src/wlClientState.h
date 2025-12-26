@@ -1,6 +1,7 @@
 #ifndef WAYLAND_CLIENT_STATE
 #define WAYLAND_CLIENT_STATE
 
+#include "internals/protocols/pointer-constraints-protocol.h"
 #include "internals/types/events.h"
 #include "keycodes.h"
 
@@ -42,26 +43,43 @@ typedef void (*fp_windowCloseBtnPress)(
 typedef void (*fp_windowMaximize)(struct WaylandClientContext *clientState);
 typedef void (*fp_windowMinimize)(struct WaylandClientContext *clientState);
 
+typedef struct PointerState {
+    struct Vector2i {
+        int x, y;
+    } position, relative_motion, last_btn_press_position;
+    uint32_t motion_timestamp;
+    uint32_t relative_motion_timestamp;
+    uint32_t last_button_press_timestamp;
+    KeyState mouseButtonState[MOUSE_BUTTON_COUNT];
+    MouseButtonCode last_pressed_button;
+} PointerState;
+
 typedef struct WaylandClientContext {
-    // Globals:
+    // Globals and interfaces:
     struct wl_display *display;
     struct wl_registry *registry;
-    struct wl_compositor *compositor;
-    struct wl_shm *shm;
-    struct xdg_wm_base *xdg_wm_base;
-    struct wl_seat *wl_seat;
 
-    // Interfaces:
+    struct wl_compositor *compositor;
     struct wl_surface *wl_surface;
+
+    struct xdg_wm_base *xdg_wm_base;
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
+
     struct zxdg_decoration_manager_v1 *xdg_decoration_manager;
     struct zxdg_toplevel_decoration_v1 *xdg_toplevel_decoration;
+
+    struct wl_seat *wl_seat;
     struct wl_keyboard *wl_keyboard;
     struct wl_pointer *wl_pointer;
     struct wl_touch *wl_touch;
+
     struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
     struct zwp_relative_pointer_v1 *relative_pointer;
+
+    struct zwp_pointer_constraints_v1 *pointer_constraint_manager;
+    struct zwp_locked_pointer_v1 *locaked_pointer;
+    struct zwp_confined_pointer_v1 *confined_pointer;
 
     // State
     double last_frame_time;
@@ -83,7 +101,7 @@ typedef struct WaylandClientContext {
     KeyState keyState[KEY_COUNT];
 
     struct wl_callback *redraw_signal_callback;
-    struct pointer_event pointer_event;
+    struct pointer_event_accumulator_t accumulated_pointer_events;
     struct xkb_state *xkb_state;
     struct xkb_context *xkb_context;
     struct xkb_keymap *xkb_keymap;

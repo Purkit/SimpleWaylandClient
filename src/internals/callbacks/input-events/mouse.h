@@ -29,70 +29,73 @@ static void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer,
                              uint32_t serial, struct wl_surface *surface,
                              wl_fixed_t surface_x, wl_fixed_t surface_y) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_ENTER;
-    client_state->pointer_event.serial    = serial;
-    client_state->pointer_event.surface_x = surface_x,
-    client_state->pointer_event.surface_y = surface_y;
+    client_state->accumulated_pointer_events.event_mask |= POINTER_EVENT_ENTER;
+    client_state->accumulated_pointer_events.serial    = serial;
+    client_state->accumulated_pointer_events.surface_x = surface_x,
+    client_state->accumulated_pointer_events.surface_y = surface_y;
 }
 
 static void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
                              uint32_t serial, struct wl_surface *surface) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.serial = serial;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_LEAVE;
+    client_state->accumulated_pointer_events.serial = serial;
+    client_state->accumulated_pointer_events.event_mask |= POINTER_EVENT_LEAVE;
 }
 
 static void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer,
                               uint32_t time, wl_fixed_t surface_x,
                               wl_fixed_t surface_y) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_MOTION;
-    client_state->pointer_event.time      = time;
-    client_state->pointer_event.surface_x = surface_x,
-    client_state->pointer_event.surface_y = surface_y;
+    client_state->accumulated_pointer_events.event_mask |= POINTER_EVENT_MOTION;
+    client_state->accumulated_pointer_events.time      = time;
+    client_state->accumulated_pointer_events.surface_x = surface_x,
+    client_state->accumulated_pointer_events.surface_y = surface_y;
 }
 
 static void wl_pointer_button(void *data, struct wl_pointer *wl_pointer,
                               uint32_t serial, uint32_t time, uint32_t button,
                               uint32_t state) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_BUTTON;
-    client_state->pointer_event.time   = time;
-    client_state->pointer_event.serial = serial;
-    client_state->pointer_event.button = button,
-    client_state->pointer_event.state  = state;
+    client_state->accumulated_pointer_events.event_mask |= POINTER_EVENT_BUTTON;
+    client_state->accumulated_pointer_events.time   = time;
+    client_state->accumulated_pointer_events.serial = serial;
+    client_state->accumulated_pointer_events.button = button,
+    client_state->accumulated_pointer_events.state  = state;
 }
 
 static void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer,
                             uint32_t time, uint32_t axis, wl_fixed_t value) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS;
-    client_state->pointer_event.time             = time;
-    client_state->pointer_event.axes[axis].valid = true;
-    client_state->pointer_event.axes[axis].value = value;
+    client_state->accumulated_pointer_events.event_mask |= POINTER_EVENT_AXIS;
+    client_state->accumulated_pointer_events.time             = time;
+    client_state->accumulated_pointer_events.axes[axis].valid = true;
+    client_state->accumulated_pointer_events.axes[axis].value = value;
 }
 
 static void wl_pointer_axis_source(void *data, struct wl_pointer *wl_pointer,
                                    uint32_t axis_source) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_SOURCE;
-    client_state->pointer_event.axis_source = axis_source;
+    client_state->accumulated_pointer_events.event_mask |=
+        POINTER_EVENT_AXIS_SOURCE;
+    client_state->accumulated_pointer_events.axis_source = axis_source;
 }
 
 static void wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
                                  uint32_t time, uint32_t axis) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.time   = time;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_STOP;
-    client_state->pointer_event.axes[axis].valid = true;
+    client_state->accumulated_pointer_events.time = time;
+    client_state->accumulated_pointer_events.event_mask |=
+        POINTER_EVENT_AXIS_STOP;
+    client_state->accumulated_pointer_events.axes[axis].valid = true;
 }
 
 static void wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
                                      uint32_t axis, int32_t discrete) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    client_state->pointer_event.event_mask |= POINTER_EVENT_AXIS_DISCRETE;
-    client_state->pointer_event.axes[axis].valid    = true;
-    client_state->pointer_event.axes[axis].discrete = discrete;
+    client_state->accumulated_pointer_events.event_mask |=
+        POINTER_EVENT_AXIS_DISCRETE;
+    client_state->accumulated_pointer_events.axes[axis].valid    = true;
+    client_state->accumulated_pointer_events.axes[axis].discrete = discrete;
 }
 
 static void wl_pointer_high_resolution_axis_event(void *data,
@@ -166,7 +169,8 @@ static void wl_pointer_relative_direction_event(void *data,
 
 static void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
     WaylandClientContext *client_state = (WaylandClientContext *)data;
-    struct pointer_event *event        = &client_state->pointer_event;
+    struct pointer_event_accumulator_t *event =
+        &client_state->accumulated_pointer_events;
     /*verbose("pointer frame @ %d: ", event->time);*/
 
     if (event->event_mask & POINTER_EVENT_ENTER) {

@@ -15,8 +15,8 @@ static void on_relative_motion(
     double na_dx = wl_fixed_to_double(dx_unaccel);
     double na_dy = wl_fixed_to_double(dy_unaccel);
 
-    verbose("\nrelative pointer event: (%f %f) (%f %f)", _dx, _dy, na_dx,
-            na_dy);
+    // verbose("\nrelative pointer event: (%f %f) (%f %f)", _dx, _dy, na_dx,
+    //         na_dy);
 }
 
 #endif // RELATIVE_POINTER_EVENT_CALLBACKS
